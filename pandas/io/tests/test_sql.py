@@ -1093,9 +1093,9 @@ class TestSQLiteAlchemy(_TestSQLAlchemy):
         obj = sql.PandasSQLTable('test_PandasSQLTable_multiindex_dtypes', 
                                  self.pandasSQL, frame=df)
         colinfo = obj.table.columns
-        self.assertEqual(obj._numpy_type(colinfo['A'].type) is int, True,
+        self.assertTrue(obj._numpy_type(colinfo['A'].type) is int, 
                          "Multi-index types not getting parsed correctly")
-        self.assertEqual(obj._numpy_type(colinfo['B'].type) is float, True,
+        self.assertTrue(obj._numpy_type(colinfo['B'].type) is float,
                          "Multi-index types not getting parsed correctly")
 
 
