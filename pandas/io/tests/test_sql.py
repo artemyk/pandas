@@ -1086,6 +1086,18 @@ class TestSQLiteAlchemy(_TestSQLAlchemy):
             sql.read_sql_table('test_bigintwarning', self.conn)
             self.assertEqual(len(w), 0, "Warning triggered for other table")
 
+    def test_PandasSQLTable_multiindex_dtypes(self):
+        df = DataFrame.from_records([(1,2.1,'line1'), (2,1.5,'line2')], 
+                                    columns=['A','B','C'], index=['A','B'])
+
+        obj = sql.PandasSQLTable('test_PandasSQLTable_multiindex_dtypes', 
+                                 self.pandasSQL, frame=df)
+        colinfo = obj.table.columns
+        self.assertEqual(obj._numpy_type(colinfo['A'].type) is int, True,
+                         "Multi-index types not getting parsed correctly")
+        self.assertEqual(obj._numpy_type(colinfo['B'].type) is float, True,
+                         "Multi-index types not getting parsed correctly")
+
 
 class TestMySQLAlchemy(_TestSQLAlchemy):
     """
