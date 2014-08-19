@@ -611,7 +611,8 @@ class PandasSQLTable(PandasObject):
             chunksize = nrows
         chunks = int(nrows / chunksize) + 1
 
-        with self.pd_sql.engine.begin() as conn:
+        session = self.pd_sql.get_session()
+        try:
             for i in range(chunks):
                 start_i = i * chunksize
                 end_i = min((i + 1) * chunksize, nrows)
@@ -622,7 +623,11 @@ class PandasSQLTable(PandasObject):
                     data = dict((k, self.maybe_asscalar(v))
                                 for k, v in zip(keys, t[1:]))
                     data_list.append(data)
-                self.pd_sql.execute(ins, data_list)
+                session.execute(ins, data_list)
+            session.commit()
+        except:
+            session.rollback()
+            raise
 
     def read(self, coerce_float=True, parse_dates=None, columns=None):
 
@@ -826,6 +831,11 @@ class PandasSQLAlchemy(PandasSQL):
             meta = MetaData(self.engine)
 
         self.meta = meta
+
+    def get_session(self):
+        from sqlalchemy.orm import sessionmaker
+        Session = sessionmaker(bind=self.engine)
+        return Session()
 
     def execute(self, *args, **kwargs):
         """Simple passthrough to SQLAlchemy engine"""
