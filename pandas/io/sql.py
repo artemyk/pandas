@@ -983,7 +983,10 @@ class PandasSQLTableLegacy(PandasSQLTable):
                 for t in temp[start_i:end_i].itertuples():
                     data = tuple((self.maybe_asscalar(v) for v in t[1:]))
                     data_list.append(data)
-                self.pd_sql.con.executemany(ins, data_list)
+
+                cur = self.pd_sql.con.cursor()
+                cur.executemany(ins, data_list)
+                cur.close()
 
     def _create_table_statement(self):
         "Return a CREATE TABLE statement to suit the contents of a DataFrame."
