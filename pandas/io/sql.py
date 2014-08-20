@@ -561,6 +561,7 @@ class PandasSQLTable(PandasObject):
                         "'{0}' is not valid for if_exists".format(if_exists))
             else:
                 self.table = self._create_table_statement()
+                print(self.table)
                 self.create()
         else:
             # no data provided, read-only mode
@@ -840,12 +841,9 @@ class PandasSQLAlchemy(PandasSQL):
         Session = sessionmaker(bind=self.engine)
         trans = Session(autocommit=False)
         try:
-            print("COMMITING?")
             yield trans
-            print("COMMITING!")
             trans.commit()
         except:
-            print("HERE!!!")
             trans.rollback()
             raise
         finally:
