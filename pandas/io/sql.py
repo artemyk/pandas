@@ -10,6 +10,8 @@ import traceback
 import itertools
 import re
 import numpy as np
+import contextlib
+
 
 import pandas.core.common as com
 from pandas.compat import lzip, map, zip, raise_with_traceback, string_types
@@ -600,9 +602,14 @@ class PandasSQLTable(PandasObject):
 
         return temp
 
+
+    def _do_insert(self, keys, data_list, trans):
+        ins = self.insert_statement()
+        data_list = [dict(zip(keys,values)) for values in data_list]
+        trans.execute(ins, data_list)
+
     def insert(self, chunksize=None):
 
-        ins = self.insert_statement()
         temp = self.insert_data()
         keys = list(map(str, temp.columns))
 
@@ -611,8 +618,7 @@ class PandasSQLTable(PandasObject):
             chunksize = nrows
         chunks = int(nrows / chunksize) + 1
 
-        session = self.pd_sql.get_session()
-        try:
+        with self.pd_sql.transaction() as trans:
             for i in range(chunks):
                 start_i = i * chunksize
                 end_i = min((i + 1) * chunksize, nrows)
@@ -620,14 +626,10 @@ class PandasSQLTable(PandasObject):
                     break
                 data_list = []
                 for t in temp[start_i:end_i].itertuples():
-                    data = dict((k, self.maybe_asscalar(v))
-                                for k, v in zip(keys, t[1:]))
+                    data = tuple((self.maybe_asscalar(v) for v in t[1:]))
                     data_list.append(data)
-                session.execute(ins, data_list)
-            session.commit()
-        except:
-            session.rollback()
-            raise
+
+                self._do_insert(keys, data_list, trans)
 
     def read(self, coerce_float=True, parse_dates=None, columns=None):
 
@@ -832,10 +834,22 @@ class PandasSQLAlchemy(PandasSQL):
 
         self.meta = meta
 
-    def get_session(self):
+    @contextlib.contextmanager
+    def transaction(self):
         from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=self.engine)
-        return Session()
+        trans = Session(autocommit=False)
+        try:
+            print("COMMITING?")
+            yield trans
+            print("COMMITING!")
+            trans.commit()
+        except:
+            print("HERE!!!")
+            trans.rollback()
+            raise
+        finally:
+            trans.close()
 
     def execute(self, *args, **kwargs):
         """Simple passthrough to SQLAlchemy engine"""
@@ -972,31 +986,11 @@ class PandasSQLTableLegacy(PandasSQLTable):
             self.name, col_names, wildcards)
         return insert_statement
 
-    def insert(self, chunksize=None):
-
+    def _do_insert(self, keys, data_list, trans):
         ins = self.insert_statement()
-        temp = self.insert_data()
-        keys = list(map(str, temp.columns))
-
-        nrows = len(temp)
-        if chunksize is None: 
-            chunksize = nrows
-        chunks = int(nrows / chunksize) + 1
-
-        with self.pd_sql.con:
-            for i in range(chunks):
-                start_i = i * chunksize
-                end_i = min((i + 1) * chunksize, nrows)
-                if start_i >= end_i:
-                    break
-                data_list = []
-                for t in temp[start_i:end_i].itertuples():
-                    data = tuple((self.maybe_asscalar(v) for v in t[1:]))
-                    data_list.append(data)
-
-                cur = self.pd_sql.con.cursor()
-                cur.executemany(ins, data_list)
-                cur.close()
+        cur = self.pd_sql.con.cursor()
+        cur.executemany(ins, data_list)
+        cur.close()
 
     def _create_table_statement(self):
         "Return a CREATE TABLE statement to suit the contents of a DataFrame."
@@ -1058,6 +1052,9 @@ class PandasSQLLegacy(PandasSQL):
             raise NotImplementedError
         else:
             self.flavor = flavor
+
+    def transaction(self):
+        return self.con            
 
     def execute(self, *args, **kwargs):
         if self.is_cursor:

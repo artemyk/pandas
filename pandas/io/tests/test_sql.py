@@ -793,6 +793,33 @@ class _TestSQLAlchemy(PandasSQLTest):
     def tearDown(self):
         raise NotImplementedError()
 
+    def test_transaction_rollback(self):
+        try:
+            temp_conn = self.connect()
+            pandasSQL = sql.PandasSQLAlchemy(temp_conn)
+
+            # begin a non-ORM transaction
+            trans = temp_conn.begin()
+
+            # bind an individual Session to the connection
+            session = Session(bind=temp_conn)
+
+            with pandasSQL.transaction() as trans:
+                temp_frame = DataFrame(
+                    {'one': [1., 2., 3., 4.], 'two': [4., 3., 2., 1.]})
+
+                #pandasSQL.to_sql(temp_frame, 'temp_frame')
+                session.execute("CREATE TABLE temp_frame (i INTa adsf )")
+                trans.commit()
+                session.close()
+                #trans.rollback()
+                #raise Exception()
+        except:
+            pass
+
+        self.assertTrue(
+            temp_conn.has_table('temp_frame'), 'Table not written to DB')
+
     def test_aread_sql(self):
         self._read_sql_iris()
 
