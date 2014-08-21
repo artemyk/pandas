@@ -456,17 +456,11 @@ class _TestSQLApi(PandasSQLTest):
         tm.assert_frame_equal(result, self.test_frame1)
 
     def test_roundtrip_chunksize(self):
-        sql.to_sql(self.test_frame1, 'test_frame_roundtrip',
-                   con=self.conn, flavor='sqlite', chunksize=2)
+        sql.to_sql(self.test_frame1, 'test_frame_roundtrip', con=self.conn, 
+            index=False, flavor='sqlite', chunksize=2)
         result = sql.read_sql_query(
             'SELECT * FROM test_frame_roundtrip',
             con=self.conn)
-
-        # HACK!
-        result.index = self.test_frame1.index
-        result.set_index('level_0', inplace=True)
-        result.index.astype(int)
-        result.index.name = None
         tm.assert_frame_equal(result, self.test_frame1)        
 
     def test_execute_sql(self):

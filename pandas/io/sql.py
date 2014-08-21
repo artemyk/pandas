@@ -611,23 +611,19 @@ class PandasSQLTable(PandasObject):
             chunksize = nrows
         chunks = int(nrows / chunksize) + 1
 
-        session = self.pd_sql.get_session()
-        try:
+        con = self.pd_sql.engine.connect()
+        with con.begin() as trans:
             for i in range(chunks):
                 start_i = i * chunksize
                 end_i = min((i + 1) * chunksize, nrows)
                 if start_i >= end_i:
                     break
                 data_list = []
-                for t in temp[start_i:end_i].itertuples():
+                for t in temp.iloc[start_i:end_i].itertuples():
                     data = dict((k, self.maybe_asscalar(v))
                                 for k, v in zip(keys, t[1:]))
                     data_list.append(data)
-                session.execute(ins, data_list)
-            session.commit()
-        except:
-            session.rollback()
-            raise
+                con.execute(ins, data_list)
 
     def read(self, coerce_float=True, parse_dates=None, columns=None):
 
@@ -832,11 +828,6 @@ class PandasSQLAlchemy(PandasSQL):
 
         self.meta = meta
 
-    def get_session(self):
-        from sqlalchemy.orm import sessionmaker
-        Session = sessionmaker(bind=self.engine)
-        return Session()
-
     def execute(self, *args, **kwargs):
         """Simple passthrough to SQLAlchemy engine"""
         return self.engine.execute(*args, **kwargs)
@@ -990,7 +981,7 @@ class PandasSQLTableLegacy(PandasSQLTable):
                 if start_i >= end_i:
                     break
                 data_list = []
-                for t in temp[start_i:end_i].itertuples():
+                for t in temp.iloc[start_i:end_i].itertuples():
                     data = tuple((self.maybe_asscalar(v) for v in t[1:]))
                     data_list.append(data)
 
