@@ -140,7 +140,8 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
                 dtype = self._validate_dtype(dtype)
 
             if isinstance(data, MultiIndex):
-                raise NotImplementedError
+                raise NotImplementedError("initializing a Series from a "
+                                          "MultiIndex is not supported")
             elif isinstance(data, Index):
                 # need to copy to avoid aliasing issues
                 if name is None:
@@ -234,6 +235,11 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
     @property
     def _constructor(self):
         return Series
+
+    @property
+    def _constructor_expanddim(self):
+        from pandas.core.frame import DataFrame
+        return DataFrame
 
     # types
     @property
@@ -1046,11 +1052,10 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         -------
         data_frame : DataFrame
         """
-        from pandas.core.frame import DataFrame
         if name is None:
-            df = DataFrame(self)
+            df = self._constructor_expanddim(self)
         else:
-            df = DataFrame({name: self})
+            df = self._constructor_expanddim({name: self})
 
         return df
 
@@ -2516,6 +2521,21 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
 
     cat = base.AccessorProperty(CategoricalAccessor, _make_cat_accessor)
 
+    def _dir_deletions(self):
+        return self._accessors
+
+    def _dir_additions(self):
+        rv = set()
+        # these accessors are mutually exclusive, so break loop when one exists
+        for accessor in self._accessors:
+            try:
+                getattr(self, accessor)
+                rv.add(accessor)
+                break
+            except AttributeError:
+                pass
+        return rv
+
 Series._setup_axes(['index'], info_axis=0, stat_axis=0,
                    aliases={'rows': 0})
 Series._add_numeric_operations()
@@ -2589,8 +2609,9 @@ def _sanitize_array(data, index, dtype=None, copy=False,
 
     # GH #846
     if isinstance(data, (np.ndarray, Index, Series)):
-        subarr = np.array(data, copy=False)
+
         if dtype is not None:
+            subarr = np.array(data, copy=False)
 
             # possibility of nan -> garbage
             if com.is_float_dtype(data.dtype) and com.is_integer_dtype(dtype):

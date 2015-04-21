@@ -242,6 +242,26 @@ class CheckNameIntegration(object):
                 s.dt
             self.assertFalse(hasattr(s, 'dt'))
 
+    def test_tab_completion(self):
+        # GH 9910
+        s = Series(list('abcd'))
+        # Series of str values should have .str but not .dt/.cat in __dir__
+        self.assertTrue('str' in dir(s))
+        self.assertTrue('dt' not in dir(s))
+        self.assertTrue('cat' not in dir(s))
+
+        # similiarly for .dt
+        s = Series(date_range('1/1/2015', periods=5))
+        self.assertTrue('dt' in dir(s))
+        self.assertTrue('str' not in dir(s))
+        self.assertTrue('cat' not in dir(s))
+
+        # similiarly for .cat
+        s = Series(list('abbcd'), dtype="category")
+        self.assertTrue('cat' in dir(s))
+        self.assertTrue('str' not in dir(s))
+        self.assertTrue('dt' not in dir(s))
+
     def test_binop_maybe_preserve_name(self):
 
         # names match, preserve
@@ -1858,6 +1878,48 @@ class TestSeries(tm.TestCase, CheckNameIntegration):
         comb[comb<2] += 10
         expected = Series([5,11,2,5,11,2],index=[0,1,2,0,1,2])
         assert_series_equal(comb, expected)
+
+    def test_where_datetime(self):
+        s = Series(date_range('20130102', periods=2))
+        expected = Series([10, 10], dtype='datetime64[ns]')
+        mask = np.array([False, False])
+
+        rs = s.where(mask, [10, 10])
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, 10)
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, 10.0)
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, [10.0, 10.0])
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, [10.0, np.nan])
+        expected = Series([10, None], dtype='datetime64[ns]')
+        assert_series_equal(rs, expected)
+
+    def test_where_timedelta(self):
+        s = Series([1, 2], dtype='timedelta64[ns]')
+        expected = Series([10, 10], dtype='timedelta64[ns]')
+        mask = np.array([False, False])
+
+        rs = s.where(mask, [10, 10])
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, 10)
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, 10.0)
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, [10.0, 10.0])
+        assert_series_equal(rs, expected)
+
+        rs = s.where(mask, [10.0, np.nan])
+        expected = Series([10, None], dtype='timedelta64[ns]')
+        assert_series_equal(rs, expected)
 
     def test_mask(self):
         # compare with tested results in test_where
@@ -5617,6 +5679,22 @@ class TestSeries(tm.TestCase, CheckNameIntegration):
         s2 = s.map(lambda x: np.where(x == 0, 0, 1))
         self.assertTrue(issubclass(s2.dtype.type, np.integer))
 
+    def test_divide_decimal(self):
+        ''' resolves issue #9787 '''
+        from decimal import Decimal
+
+        expected = Series([Decimal(5)])
+
+        s =  Series([Decimal(10)])
+        s =  s/Decimal(2)
+
+        tm.assert_series_equal(expected, s)
+
+        s =  Series([Decimal(10)])
+        s =  s//Decimal(2)
+
+        tm.assert_series_equal(expected, s)
+
     def test_map_decimal(self):
         from decimal import Decimal
 
@@ -6793,6 +6871,22 @@ class TestSeries(tm.TestCase, CheckNameIntegration):
         e = np.array([0, 2])
         tm.assert_array_equal(r, e)
 
+    def test_to_frame_expanddim(self):
+        # GH 9762
+
+        class SubclassedSeries(Series):
+            @property
+            def _constructor_expanddim(self):
+                return SubclassedFrame
+
+        class SubclassedFrame(DataFrame):
+            pass
+
+        s = SubclassedSeries([1, 2, 3], name='X')
+        result = s.to_frame()
+        self.assertTrue(isinstance(result, SubclassedFrame))
+        expected = SubclassedFrame({'X': [1, 2, 3]})
+        assert_frame_equal(result, expected)
 
 
 class TestSeriesNonUnique(tm.TestCase):
